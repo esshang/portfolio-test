@@ -117,7 +117,7 @@
 <div id="loader" role="status" aria-label="Loading"><div class="l-title">Selected Works</div><div class="l-bar"><i></i></div></div>
 <script>setTimeout(function(){var l=document.getElementById("loader");if(l)l.className+=" done";document.body.className+=" ready"},12000)</script>
 <header>
-  <div id="title">Portfolio</div>
+  <div id="title">Mrinalini Ganesh | Portfolio 2026</div>
   <button id="zoom" class="flip-only" aria-label="Zoom in on the current pages"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg></button>
   <div id="count"><input id="pg" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" aria-label="Go to page"><span id="of"></span></div>
   <div class="seg" role="group" aria-label="View mode">
@@ -144,7 +144,7 @@
 <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
 <script>
 // ---- Settings ----
-var TITLE = "Portfolio";   // shown in the top bar
+var TITLE = "Mrinalini Ganesh | Portfolio 2026";   // shown in the top bar
 var TOTAL = 36;            // number of pages (1.webp ... N.webp)
 var DIR = "pages/";        // folder holding the images; use "" if they sit beside index.html
 // The aspect ratio is read automatically from 1-m.webp (A4, A3, 16:9, square, anything).
@@ -230,7 +230,11 @@ function buildStrip(){
     b.className = "t"; b.setAttribute("role", "listitem");
     b.setAttribute("aria-label", "Pages " + (s.length === 1 ? s[0] : s[0] + " to " + s[1]));
     s.forEach(function(p){ var im = new Image(); im.alt = ""; im.loading = "lazy"; im.src = thumb(p); b.appendChild(im); });
-    b.onclick = function(){ goTo(s[0]); };
+    b.onclick = function(){
+      goTo(s[0]);
+      this.blur();
+      $("#strip").classList.remove("show");
+    };
     $("#strip").appendChild(b);
   });
 }
