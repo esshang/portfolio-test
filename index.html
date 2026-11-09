@@ -52,7 +52,8 @@
   /* flip view (StPageFlip). #book fills the stage; the library fits the pages inside it at any aspect ratio. */
   #stage{display:none;position:fixed;inset:52px 0 96px 0;overflow:hidden}
   body.flip #stage{display:block}
-  #bookwrap{position:absolute;inset:16px 56px}
+  #bookwrap{position:absolute;inset:16px 56px;opacity:0;transform:translateY(12px);transition:opacity .9s ease .15s,transform .9s ease .15s}
+  body.ready #bookwrap{opacity:1;transform:none}
   @media (max-width:760px){#bookwrap{inset:12px 8px}}
   #book{width:100%;height:100%;min-width:0!important;min-height:0!important;cursor:grab}
   /* structural styles StPageFlip relies on (harmless if the library already injects them) */
@@ -67,10 +68,24 @@
     background:var(--bg);align-items:center;scrollbar-width:none}
   #strip::-webkit-scrollbar{display:none}
   body.flip #strip{display:flex}
-  .t{flex:none;display:flex;gap:1px;padding:0;opacity:.35;transition:opacity .15s}
-  .t:hover{opacity:.7}
+  .t{flex:none;display:flex;gap:1px;padding:0;opacity:.35;transition:opacity .15s,transform .2s ease}
+  .t:hover{opacity:.7;transform:scale(1.04)}
   .t[aria-current="true"]{opacity:1}
   .t img{height:56px;width:auto;aspect-ratio:var(--aspect);display:block;object-fit:cover}
+
+  /* mouse devices: the strip hides and slides up near the bottom edge, arrows show near the side edges */
+  #hint{display:none}
+  @media (hover:hover) and (pointer:fine){
+    #stage{bottom:28px}
+    .arrow{bottom:28px}
+    .arrow,.arrow:disabled{opacity:0;transition:opacity .25s ease}
+    .arrow:hover:not(:disabled),.arrow:focus-visible{opacity:1}
+    #strip{transform:translateY(100%);transition:transform .35s ease}
+    #strip.show,#strip:focus-within{transform:none}
+    body.flip #hint{display:block;position:fixed;left:50%;bottom:11px;width:40px;height:2px;margin-left:-20px;
+      background:var(--line);border-radius:2px;pointer-events:none;transition:opacity .25s}
+    #strip.show + #hint{opacity:0}
+  }
 
   #scroll{display:none;max-width:1400px;margin:0 auto;padding:84px 24px 80px}
   body.scroll #scroll{display:block}
@@ -100,7 +115,7 @@
 </head>
 <body class="flip">
 <div id="loader" role="status" aria-label="Loading"><div class="l-title">Selected Works</div><div class="l-bar"><i></i></div></div>
-<script>setTimeout(function(){var l=document.getElementById("loader");if(l)l.className+=" done"},12000)</script>
+<script>setTimeout(function(){var l=document.getElementById("loader");if(l)l.className+=" done";document.body.className+=" ready"},12000)</script>
 <header>
   <div id="title">Portfolio</div>
   <button id="zoom" class="flip-only" aria-label="Zoom in on the current pages"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg></button>
@@ -115,7 +130,7 @@
 <button id="next" class="arrow" aria-label="Next page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5l7 7-7 7"/></svg></button>
 
 <div id="stage"><div id="bookwrap"><div id="book"></div></div></div>
-<div id="strip" role="list" aria-label="Pages"></div>
+<div id="strip" role="list" aria-label="Pages"></div><div id="hint"></div>
 <div id="scroll"></div>
 <div id="lb" role="dialog" aria-modal="true" aria-label="Zoomed pages">
   <div class="in"></div>
@@ -239,9 +254,13 @@ function runLoader(){
   (function frame(){
     var real = need.length ? done / need.length : 1;
     var target = real >= 1 ? 1 : Math.min(0.9, real * 0.8 + Math.min(0.2, (Date.now() - t0) / 8000));
-    shown += (target - shown) * 0.12;
+    shown += (target - shown) * (real >= 1 ? 0.06 : 0.12);   // slower, deliberate final fill
     bar.style.transform = "scaleX(" + shown + ")";
-    if (real >= 1 && shown > 0.995 && Date.now() - t0 > 700) { bar.style.transform = "scaleX(1)"; loader.classList.add("done"); return; }
+    if (real >= 1 && shown > 0.99 && Date.now() - t0 > 700) {
+      bar.style.transform = "scaleX(1)";
+      setTimeout(function(){ loader.classList.add("done"); document.body.classList.add("ready"); }, 220);   // hold the full bar a beat, then fade the loader and the book in
+      return;
+    }
     requestAnimationFrame(frame);
   })();
 }
@@ -379,6 +398,15 @@ pg.addEventListener("keydown", function(e){
 });
 pg.addEventListener("blur", function(){ if (pf) updateUI(); });
 
+if (matchMedia("(hover:hover) and (pointer:fine)").matches) {
+  var stripEl = $("#strip");
+  window.addEventListener("pointermove", function(e){
+    if (!document.body.classList.contains("flip")) return;
+    var zone = stripEl.classList.contains("show") ? 100 : 30;   // narrow trigger below the book, wider to stay open
+    stripEl.classList.toggle("show", e.clientY > window.innerHeight - zone);
+  }, {passive: true});
+  document.documentElement.addEventListener("mouseleave", function(){ stripEl.classList.remove("show"); });
+}
 $("#m-flip").onclick = function(){ setMode("flip"); };
 $("#m-scroll").onclick = function(){ setMode("scroll"); };
 $("#prev").onclick = function(){ pf.flipPrev("bottom"); };
