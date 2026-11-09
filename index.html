@@ -409,8 +409,20 @@ if (matchMedia("(hover:hover) and (pointer:fine)").matches) {
 }
 $("#m-flip").onclick = function(){ setMode("flip"); };
 $("#m-scroll").onclick = function(){ setMode("scroll"); };
-$("#prev").onclick = function(){ pf.flipPrev("bottom"); };
-$("#next").onclick = function(){ pf.flipNext("bottom"); };
+// The library's flipPrev() starts at x=10 relative to the viewport,
+// which falls outside this centered book. Start from the book's actual
+// left edge instead; this keeps the normal animated flip and click lock.
+function flipFromArrow(direction){
+  if (!pf) return;
+  if (direction < 0) {
+    var rect = pf.getBoundsRect();
+    pf.getFlipController().flip({x: rect.left + 10, y: rect.height - 2});
+  } else {
+    pf.flipNext("bottom");
+  }
+}
+$("#prev").onclick = function(){ flipFromArrow(-1); };
+$("#next").onclick = function(){ flipFromArrow(1); };
 $("#zoom").onclick = openZoom;
 bookEl.addEventListener("dblclick", openZoom);
 $("#fs").onclick = function(){
@@ -440,7 +452,7 @@ window.addEventListener("keydown", function(e){
     return;
   }
   if (e.target.tagName === "INPUT" || !pf || !document.body.classList.contains("flip")) return;
-  if (e.keyCode === 37) { pf.flipPrev("bottom"); e.preventDefault(); }
+  if (e.keyCode === 37) { flipFromArrow(-1); e.preventDefault(); }
   if (e.keyCode === 39) { pf.flipNext("bottom"); e.preventDefault(); }
 });
 </script>
