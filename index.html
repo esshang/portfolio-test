@@ -73,8 +73,9 @@
   /* scroll view */
   #scroll{display:none;max-width:1400px;margin:0 auto;padding:84px 24px 80px}
   body.scroll #scroll{display:block}
-  #scroll img{display:block;width:100%;height:auto;aspect-ratio:1/1;background:var(--paper);margin:0 0 20px}
-  @media (max-width:600px){#scroll{padding:64px 0 40px}#scroll img{margin-bottom:8px}}
+  #scroll .row{display:flex;justify-content:center;margin:0 0 24px}
+  #scroll .row img{display:block;width:50%;height:auto;aspect-ratio:1/1;background:var(--paper)}
+  @media (max-width:600px){#scroll{padding:64px 0 40px}#scroll .row{margin-bottom:8px}}
 
   /* zoom */
   #lb{display:none;position:fixed;inset:0;z-index:20;background:var(--bg);overflow:auto;cursor:zoom-out}
@@ -141,16 +142,16 @@ function load(n){
 function loadAround(p){ for (var k = p - 3; k <= p + 5; k++) load(k); }
 
 // ----- sizing -----
-function isSingle(){ return window.innerWidth < 760; }
 function dims(){
-  var aw = window.innerWidth - (isSingle() ? 48 : 112), ah = window.innerHeight - 52 - 96 - 32, s;
-  if (isSingle()) { s = Math.max(200, Math.min(aw, ah)); return {w: s, h: s}; }
-  s = Math.max(200, Math.min(aw / 2, ah)); return {w: Math.round(s * 2), h: Math.round(s)};
+  var small = window.innerWidth < 760;
+  var aw = window.innerWidth - (small ? 16 : 112), ah = window.innerHeight - 52 - 96 - (small ? 24 : 32);
+  var s = Math.max(120, Math.min(aw / 2, ah));
+  return {w: Math.round(s * 2), h: Math.round(s)};
 }
 function place(view){
   // r3 has no auto-centering: slide the book so a lone cover / last page sits in the middle
   var d = dims(), shift = 0;
-  if (!isSingle() && view) {
+  if (view) {
     if (view[0] === 0) shift = -d.w / 4;
     else if (view[1] === 0 || view[1] > TOTAL) shift = d.w / 4;
   }
@@ -189,7 +190,7 @@ $wrap.css({width: d0.w, height: d0.h});
 $book.css({width: d0.w, height: d0.h});
 $book.turn({
   width: d0.w, height: d0.h,
-  display: isSingle() ? "single" : "double",
+  display: "double",
   duration: 900,
   gradients: !("ontouchstart" in window),
   acceleration: !window.chrome,   // Chrome renders the page text softer with 3D acceleration on
@@ -209,15 +210,19 @@ loadAround(1); place($book.turn("view")); updateUI($book.turn("view"));
 
 function resize(){
   var d = dims();
-  $book.turn("display", isSingle() ? "single" : "double");
   $book.turn("size", d.w, d.h);
   place($book.turn("view"));
 }
 
-// ----- scroll view -----
+// ----- scroll view (spreads) -----
 function buildScroll(){
   var sc = $("#scroll");
-  for (var n = 1; n <= TOTAL; n++) sc.append($('<img alt="Page ' + n + '" loading="lazy">').attr("src", med(n)));
+  // same grouping as the flipbook: cover alone, spreads as pairs, last page alone
+  SP.forEach(function(s){
+    var row = $('<div class="row"></div>');
+    s.forEach(function(p){ row.append($('<img loading="lazy">').attr({alt: "Page " + p, src: med(p)})); });
+    sc.append(row);
+  });
 }
 
 function setMode(mode){
