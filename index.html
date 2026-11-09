@@ -6,7 +6,7 @@
 <title>Mrinalini Ganesh | Portfolio 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;&display=swap" rel="stylesheet">
 <style>
   :root{ --bg:#f1f1ef; --ink:#111; --mute:#8c8c89; --line:#d9d8d4; --paper:#fff; --aspect:1; }
   @media (prefers-color-scheme: dark){
@@ -14,13 +14,15 @@
   }
   *{box-sizing:border-box;margin:0}
   html,body{height:100%}
-  body{background:var(--bg);color:var(--ink);font:400 16px/1.4 "Hanken Grotesk",system-ui,sans-serif;
+  body{background:var(--bg);color:var(--ink);font:300 12px/1.4 "Hanken Grotesk",system-ui,sans-serif;
     letter-spacing:.02em;-webkit-font-smoothing:antialiased}
   body.flip{overflow:hidden}
 
   header{position:fixed;inset:0 0 auto 0;height:52px;z-index:10;display:flex;align-items:center;gap:20px;
     padding:0 20px;background:var(--bg)}
   #title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #title b{font-weight:500}
+  #title span{color:var(--mute)}
   .seg{display:flex;gap:16px}
   button{font:inherit;letter-spacing:inherit;color:var(--mute);background:none;border:0;padding:6px 0;cursor:pointer;transition:color .15s,opacity .15s}
   button:hover:not(:disabled),button[aria-pressed="true"]{color:var(--ink)}
