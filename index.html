@@ -195,7 +195,7 @@ function start(){
     width: 1000, height: Math.round(1000 / ASPECT),   // only the page ratio matters in stretch mode
     size: "stretch", minWidth: 320, maxWidth: 4000, minHeight: 100, maxHeight: 4000,
     autoSize: false,                // #book is sized by the CSS above
-    showCover: true, usePortrait: true,   // single page when the stage is narrow
+    showCover: true, usePortrait: false,  // always show spreads, even on small screens
     showPageCorners: true,          // hover fold on the corners
     useMouseEvents: true, mobileScrollSupport: false, swipeDistance: 20,
     disableFlipByClick: true,       // flip by corner click / drag / arrows only (double-click opens zoom)
