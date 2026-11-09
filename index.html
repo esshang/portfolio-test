@@ -52,7 +52,7 @@
   /* flip view (StPageFlip). #book fills the stage; the library fits the pages inside it at any aspect ratio. */
   #stage{display:none;position:fixed;inset:52px 0 96px 0;overflow:hidden}
   body.flip #stage{display:block}
-  #bookwrap{position:absolute;inset:16px 56px;transition:transform .45s ease}   /* the wrapper slides to centre a lone cover / last page */
+  #bookwrap{position:absolute;inset:16px 56px}
   @media (max-width:760px){#bookwrap{inset:12px 8px}}
   #book{width:100%;height:100%;min-width:0!important;min-height:0!important;cursor:grab}
   /* structural styles StPageFlip relies on (harmless if the library already injects them) */
@@ -140,7 +140,7 @@ var large = function(n){ return DIR + n + ".webp"; };
 var med   = function(n){ return DIR + n + "-m.webp"; };
 var thumb = function(n){ return DIR + n + "-thumb.webp"; };
 var $ = function(s){ return document.querySelector(s); };
-var bookEl = $("#book"), wrapEl = $("#bookwrap");
+var bookEl = $("#book");
 var ASPECT = 1, pf = null, imgs = {}, pages = [];
 document.title = TITLE; $("#title").textContent = TITLE;
 
@@ -165,12 +165,6 @@ function view(){
   var p = pf.getCurrentPageIndex() + 1;
   return pf.getOrientation() === "portrait" ? [p] : SP[spreadOf(p)];
 }
-// a lone cover / last page is slid to the middle of the stage
-function place(){
-  var v = view(), shift = 0, w = pf.getBoundsRect().pageWidth;
-  if (pf.getOrientation() === "landscape" && v.length === 1) shift = v[0] === 1 ? -w / 2 : w / 2;
-  wrapEl.style.transform = "translateX(" + shift + "px)";
-}
 function updateUI(){
   var v = view();
   $("#pg").value = v.length === 1 ? v[0] : v[0] + "–" + v[1];
@@ -183,8 +177,11 @@ function updateUI(){
     if (k === cur && b.scrollIntoView) b.scrollIntoView({inline: "center", block: "nearest"});
   });
 }
-function refresh(){ loadAround(view()[0]); place(); updateUI(); }
-function goTo(p){ pf.flip(Math.max(1, Math.min(TOTAL, p)) - 1, "bottom"); }
+function refresh(){ loadAround(view()[0]); updateUI(); }
+function goTo(p){
+  pf.turnToPage(Math.max(1, Math.min(TOTAL, p)) - 1);   // instant jump
+  refresh();
+}
 
 function start(){
   document.documentElement.style.setProperty("--aspect", ASPECT);
@@ -203,7 +200,7 @@ function start(){
     useMouseEvents: true, mobileScrollSupport: false, swipeDistance: 20,
     disableFlipByClick: true,       // flip by corner click / drag / arrows only (double-click opens zoom)
     drawShadow: false, maxShadowOpacity: 0,
-    flippingTime: 500, startPage: 0
+    flippingTime: 900, startPage: 0
   });
   pf.on("init", refresh); pf.on("flip", refresh); pf.on("changeOrientation", refresh);
   pf.loadFromHTML(pages);
@@ -393,7 +390,7 @@ $("#fs").onclick = function(){
   else document.documentElement.requestFullscreen();
 };
 function onResize(){
-  if (pf && document.body.classList.contains("flip")) { pf.update(); place(); }
+  if (pf && document.body.classList.contains("flip")) { pf.update(); }
   if (lb.classList.contains("on")) { layout(); z.s = 1; apply(); }
 }
 window.addEventListener("resize", onResize);
