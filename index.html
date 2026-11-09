@@ -6,7 +6,7 @@
 <title>Mrinalini Ganesh | Portfolio 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{ --bg:#f1f1ef; --ink:#111; --mute:#8c8c89; --line:#d9d8d4; --paper:#fff; --aspect:1; }
   @media (prefers-color-scheme: dark){
@@ -14,22 +14,22 @@
   }
   *{box-sizing:border-box;margin:0}
   html,body{height:100%}
-  body{background:var(--bg);color:var(--ink);font:300 12px/1.4 "Hanken Grotesk",system-ui,sans-serif;
+  body{background:var(--bg);color:var(--ink);font:400 16px/1.4 "Hanken Grotesk",system-ui,sans-serif;
     letter-spacing:.02em;-webkit-font-smoothing:antialiased}
   body.flip{overflow:hidden}
 
   header{position:fixed;inset:0 0 auto 0;height:52px;z-index:10;display:flex;align-items:center;gap:20px;
-    padding:0 20px;background:var(--bg)}
-  #title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #title b{font-weight:500}
+    padding:0 20px;background:var(--bg);font-size:14px}
+  #title{flex:1;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #title b{font-weight:600}
   #title span{color:var(--mute)}
   .seg{display:flex;gap:16px}
   button{font:inherit;letter-spacing:inherit;color:var(--mute);background:none;border:0;padding:6px 0;cursor:pointer;transition:color .15s,opacity .15s}
   button:hover:not(:disabled),button[aria-pressed="true"]{color:var(--ink)}
   button:disabled{opacity:.2;cursor:default}
   button:focus-visible{outline:1px solid var(--ink);outline-offset:3px}
-  #zoom,#fs{line-height:0}
-  #zoom svg,#fs svg{width:22px;height:22px;display:block;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+  #zoom,#fs{line-height:0;padding:10px 4px}
+  #zoom svg,#fs svg{width:13px;height:13px;display:block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .flip-only{display:none}
   body.flip .flip-only{display:inline-block}
 
@@ -159,7 +159,13 @@ var thumb = function(n){ return DIR + n + "-thumb.webp"; };
 var $ = function(s){ return document.querySelector(s); };
 var bookEl = $("#book");
 var ASPECT = 1, pf = null, imgs = {}, pages = [];
-document.title = TITLE; $("#title").textContent = TITLE;
+document.title = TITLE;
+(function(){   // name in heavier weight, anything after " | " muted
+  var parts = TITLE.split(" | "), t = $("#title");
+  t.textContent = "";
+  var b = document.createElement("b"); b.textContent = parts[0]; t.appendChild(b);
+  if (parts.length > 1) { var s = document.createElement("span"); s.textContent = " | " + parts.slice(1).join(" | "); t.appendChild(s); }
+})();
 
 // spreads (1-based): cover alone, then pairs, last page alone if the count is even
 var SP = [[1]];
