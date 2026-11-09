@@ -31,7 +31,6 @@
   .flip-only{display:none}
   body.flip .flip-only{display:inline-block}
 
-  /* page indicator: type a page number to jump */
   #count{display:flex;align-items:baseline;gap:5px;color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap}
   #pg{font:inherit;letter-spacing:inherit;font-variant-numeric:inherit;color:var(--ink);background:none;border:0;
     border-bottom:1px solid transparent;border-radius:0;width:5.5ch;padding:0;text-align:right;transition:border-color .15s}
@@ -39,7 +38,6 @@
   #pg:focus{outline:none;border-bottom-color:var(--ink)}
   body.scroll #pg{display:none}
 
-  /* side arrows */
   .arrow{display:none;position:fixed;top:52px;bottom:96px;width:56px;align-items:center;justify-content:center;z-index:5;padding:0}
   body.flip .arrow{display:flex}
   #prev{left:0} #next{right:0}
@@ -51,16 +49,20 @@
     #count{margin-left:auto}
   }
 
-  /* flip view */
+  /* flip view (StPageFlip). #book fills the stage; the library fits the pages inside it at any aspect ratio. */
   #stage{display:none;position:fixed;inset:52px 0 96px 0;overflow:hidden}
   body.flip #stage{display:block}
-  #bookwrap{position:absolute;left:50%;top:50%;transition:transform .45s ease}
-  #book{position:relative;transform-origin:center}
-  #book .turn-page{background:var(--paper)}
-  #book .p img{display:block;width:100%;height:100%;pointer-events:none;-webkit-user-drag:none;user-select:none}
-  #book{cursor:grab}
+  #bookwrap{position:absolute;inset:16px 56px;transition:transform .45s ease}   /* the wrapper slides to centre a lone cover / last page */
+  @media (max-width:760px){#bookwrap{inset:12px 8px}}
+  #book{width:100%;height:100%;min-width:0!important;min-height:0!important;cursor:grab}
+  /* structural styles StPageFlip relies on (harmless if the library already injects them) */
+  .stf__parent{position:relative;display:block;box-sizing:border-box;transform:translateZ(0)}
+  .stf__wrapper{position:relative;width:100%;height:100%;box-sizing:border-box}
+  .stf__block{position:absolute;width:100%;height:100%;box-sizing:border-box;perspective:2000px}
+  .stf__item{position:absolute;display:none;transform-style:preserve-3d}
+  .page{background:var(--paper);overflow:hidden}
+  .page img{display:block;width:100%;height:100%;pointer-events:none;-webkit-user-drag:none;user-select:none}
 
-  /* thumbnail strip: only the current spread is fully visible */
   #strip{display:none;position:fixed;inset:auto 0 0 0;height:96px;padding:0 20px;gap:12px;overflow-x:auto;
     background:var(--bg);align-items:center;scrollbar-width:none}
   #strip::-webkit-scrollbar{display:none}
@@ -70,14 +72,12 @@
   .t[aria-current="true"]{opacity:1}
   .t img{height:56px;width:auto;aspect-ratio:var(--aspect);display:block;object-fit:cover}
 
-  /* scroll view */
   #scroll{display:none;max-width:1400px;margin:0 auto;padding:84px 24px 80px}
   body.scroll #scroll{display:block}
   #scroll .row{display:flex;justify-content:center;margin:0 0 24px}
   #scroll .row img{display:block;width:50%;height:auto;aspect-ratio:var(--aspect);background:var(--paper)}
   @media (max-width:600px){#scroll{padding:64px 0 40px}#scroll .row{margin-bottom:8px}}
 
-  /* zoom: fitted to the screen, wheel / pinch to zoom, drag to pan */
   #lb{display:none;position:fixed;inset:0;z-index:20;background:var(--bg);overflow:hidden;touch-action:none;
     cursor:grab;user-select:none;-webkit-user-select:none}
   #lb.on{display:block}
@@ -89,7 +89,6 @@
   #lbtools button{width:36px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;line-height:0}
   #lbtools svg{width:17px;height:17px;display:block;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round}
 
-  /* loading state */
   #loader{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;flex-direction:column;
     align-items:center;justify-content:center;gap:18px;transition:opacity .7s ease,visibility 0s .7s}
   #loader.done{opacity:0;visibility:hidden;pointer-events:none}
@@ -127,195 +126,162 @@
   </div>
 </div>
 
-<script src="jquery.min.js"></script>
-<script src="turn.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
 <script>
 // ---- Settings ----
 var TITLE = "Portfolio";   // shown in the top bar
 var TOTAL = 36;            // number of pages (1.webp ... N.webp)
-var ASPECT = 1;            // one page's width / height: square = 1, A4 portrait = 0.707, A4 landscape = 1.414
+var DIR = "pages/";        // folder holding the images; use "" if they sit beside index.html
+// The aspect ratio is read automatically from 1-m.webp (A4, A3, 16:9, square, anything).
 // Three sizes per page: N-thumb.webp (strip), N-m.webp (flipping), N.webp (zoom)
 // ------------------
 
-var DIR = "pages/";        // folder holding the images; use "" if they sit beside index.html
 var large = function(n){ return DIR + n + ".webp"; };
 var med   = function(n){ return DIR + n + "-m.webp"; };
 var thumb = function(n){ return DIR + n + "-thumb.webp"; };
-var $book = $("#book"), $wrap = $("#bookwrap");
-document.documentElement.style.setProperty("--aspect", ASPECT);
-document.title = TITLE; $("#title").text(TITLE);
+var $ = function(s){ return document.querySelector(s); };
+var bookEl = $("#book"), wrapEl = $("#bookwrap");
+var ASPECT = 1, pf = null, imgs = {}, pages = [];
+document.title = TITLE; $("#title").textContent = TITLE;
 
 // spreads (1-based): cover alone, then pairs, last page alone if the count is even
 var SP = [[1]];
 for (var i = 2; i <= TOTAL; i += 2) SP.push(i + 1 <= TOTAL ? [i, i + 1] : [i]);
 function spreadOf(p){ for (var k = 0; k < SP.length; k++) if (SP[k].indexOf(p) > -1) return k; return 0; }
 
-// ----- build pages -----
-// Turn.js keeps only a few pages in the DOM at a time, so keep a reference to every
-// page's <img> by number instead of looking pages up by position.
-var imgs = {};
-for (var n = 1; n <= TOTAL; n++) {
-  var el = $('<div class="p"><img alt="Page ' + n + '" draggable="false"></div>');
-  imgs[n] = el.find("img")[0];
-  $book.append(el);
-}
-function load(n){
-  var im = imgs[n];
-  if (im && !im.getAttribute("src")) im.src = med(n);
-}
+// read the page shape from the first image, then build everything
+var probe = new Image();
+probe.onload = probe.onerror = function(){
+  if (probe.naturalWidth) ASPECT = probe.naturalWidth / probe.naturalHeight;
+  start();
+};
+probe.src = med(1);
+
+function load(n){ var im = imgs[n]; if (im && !im.getAttribute("src")) im.src = med(n); }
 function loadAround(p){ for (var k = p - 3; k <= p + 5; k++) load(k); }
 
-// ----- sizing -----
-function dims(){
-  var small = window.innerWidth < 760;
-  var aw = window.innerWidth - (small ? 16 : 112), ah = window.innerHeight - 52 - 96 - (small ? 24 : 32);
-  var s = Math.max(120, Math.min(aw / (2 * ASPECT), ah));
-  return {w: Math.round(s * 2 * ASPECT), h: Math.round(s)};
+// pages (1-based) currently on screen
+function view(){
+  var p = pf.getCurrentPageIndex() + 1;
+  return pf.getOrientation() === "portrait" ? [p] : SP[spreadOf(p)];
 }
-function place(view){
-  // r3 has no auto-centering: slide the book so a lone cover / last page sits in the middle
-  var d = dims(), shift = 0;
-  if (view) {
-    if (view[0] === 0) shift = -d.w / 4;
-    else if (view[1] === 0 || view[1] > TOTAL) shift = d.w / 4;
-  }
-  $wrap.css({width: d.w, height: d.h, marginLeft: -d.w / 2, marginTop: -d.h / 2,
-             transform: "translateX(" + shift + "px)"});
+// a lone cover / last page is slid to the middle of the stage
+function place(){
+  var v = view(), shift = 0, w = pf.getBoundsRect().pageWidth;
+  if (pf.getOrientation() === "landscape" && v.length === 1) shift = v[0] === 1 ? -w / 2 : w / 2;
+  wrapEl.style.transform = "translateX(" + shift + "px)";
 }
-
-// ----- UI state -----
-function labelOf(view){
-  var v = view.filter(function(x){ return x > 0 && x <= TOTAL; });
-  return v.length === 1 ? String(v[0]) : v[0] + "–" + v[1];
-}
-function updateUI(view){
-  $("#pg").val(labelOf(view)); $("#of").text("/ " + TOTAL);
-  $("#prev").prop("disabled", view.indexOf(1) > -1);
-  $("#next").prop("disabled", view.indexOf(TOTAL) > -1);
-  var cur = spreadOf(view.filter(Boolean)[0] || 1);
-  $("#strip").children().each(function(k){
-    this.setAttribute("aria-current", k === cur);
-    if (k === cur && this.scrollIntoView) this.scrollIntoView({inline: "center", block: "nearest"});
+function updateUI(){
+  var v = view();
+  $("#pg").value = v.length === 1 ? v[0] : v[0] + "–" + v[1];
+  $("#of").textContent = "/ " + TOTAL;
+  $("#prev").disabled = v.indexOf(1) > -1;
+  $("#next").disabled = v.indexOf(TOTAL) > -1;
+  var cur = spreadOf(v[0]);
+  Array.prototype.forEach.call($("#strip").children, function(b, k){
+    b.setAttribute("aria-current", k === cur);
+    if (k === cur && b.scrollIntoView) b.scrollIntoView({inline: "center", block: "nearest"});
   });
 }
+function refresh(){ loadAround(view()[0]); place(); updateUI(); }
+function goTo(p){ pf.flip(Math.max(1, Math.min(TOTAL, p)) - 1, "bottom"); }
+
+function start(){
+  document.documentElement.style.setProperty("--aspect", ASPECT);
+  for (var n = 1; n <= TOTAL; n++) {
+    var el = document.createElement("div");
+    el.className = "page";
+    el.innerHTML = '<img alt="Page ' + n + '" draggable="false">';
+    imgs[n] = el.firstChild; pages.push(el); bookEl.appendChild(el);
+  }
+  pf = new St.PageFlip(bookEl, {
+    width: 1000, height: Math.round(1000 / ASPECT),   // only the page ratio matters in stretch mode
+    size: "stretch", minWidth: 320, maxWidth: 4000, minHeight: 100, maxHeight: 4000,
+    autoSize: false,                // #book is sized by the CSS above
+    showCover: true, usePortrait: true,   // single page when the stage is narrow
+    showPageCorners: true,          // hover fold on the corners
+    useMouseEvents: true, mobileScrollSupport: false, swipeDistance: 20,
+    disableFlipByClick: true,       // flip by corner click / drag / arrows only (double-click opens zoom)
+    drawShadow: false, maxShadowOpacity: 0,
+    flippingTime: 900, startPage: 0
+  });
+  pf.on("init", refresh); pf.on("flip", refresh); pf.on("changeOrientation", refresh);
+  pf.loadFromHTML(pages);
+  loadAround(1); buildStrip(); buildScroll(); runLoader();
+  setMode(new URLSearchParams(location.search).get("view") === "scroll" ? "scroll" : "flip");
+  setTimeout(refresh, 60);
+}
+
 function buildStrip(){
   SP.forEach(function(s){
-    var b = $('<button class="t" role="listitem"></button>');
-    b.attr("aria-label", "Pages " + (s.length === 1 ? s[0] : s[0] + " to " + s[1]));
-    s.forEach(function(p){ b.append($('<img alt="" loading="lazy">').attr("src", thumb(p))); });
-    b.on("click", function(){ $book.turn("page", s[0]); });
-    $("#strip").append(b);
+    var b = document.createElement("button");
+    b.className = "t"; b.setAttribute("role", "listitem");
+    b.setAttribute("aria-label", "Pages " + (s.length === 1 ? s[0] : s[0] + " to " + s[1]));
+    s.forEach(function(p){ var im = new Image(); im.alt = ""; im.loading = "lazy"; im.src = thumb(p); b.appendChild(im); });
+    b.onclick = function(){ goTo(s[0]); };
+    $("#strip").appendChild(b);
+  });
+}
+function buildScroll(){
+  SP.forEach(function(s){
+    var row = document.createElement("div"); row.className = "row";
+    s.forEach(function(p){ var im = new Image(); im.loading = "lazy"; im.alt = "Page " + p; im.src = med(p); row.appendChild(im); });
+    $("#scroll").appendChild(row);
   });
 }
 
-// ----- flipbook -----
-var d0 = dims();
-$wrap.css({width: d0.w, height: d0.h});
-$book.css({width: d0.w, height: d0.h});
-$book.turn({
-  width: d0.w, height: d0.h,
-  display: "double",
-  duration: 900,
-  gradients: !("ontouchstart" in window),
-  acceleration: !window.chrome,   // Chrome renders the page text softer with 3D acceleration on
-  elevation: 50,
-  when: {
-    turning: function(e, page){
-      loadAround(page);
-      place($book.turn("view", page));
-    },
-    turned: function(e, page){
-      var v = $book.turn("view");
-      loadAround(page); place(v); updateUI(v);
-    }
-  }
-});
-loadAround(1); place($book.turn("view")); updateUI($book.turn("view"));
-
-// ----- loading state -----
-// Waits for the cover and the spread after it, then fades out. The bar eases toward the
-// real progress (with a slow creep) so it never jumps, and it stays up at least 0.7 s.
-(function(){
+// ----- loading state: waits for the cover and the spread after it, then fades out -----
+function runLoader(){
   var need = [1, 2, 3].filter(function(n){ return n <= TOTAL; });
-  var done = 0, shown = 0, t0 = Date.now();
-  var bar = document.querySelector("#loader i"), loader = document.getElementById("loader");
+  var done = 0, shown = 0, t0 = Date.now(), bar = $("#loader i"), loader = $("#loader");
   need.forEach(function(n){
     var im = imgs[n];
     if (im.complete && im.naturalWidth) done++;
-    else {
-      im.addEventListener("load",  function(){ done++; });
-      im.addEventListener("error", function(){ done++; });   // a missing image must not block the page
-    }
+    else { im.addEventListener("load", function(){ done++; }); im.addEventListener("error", function(){ done++; }); }
   });
-  function frame(){
+  (function frame(){
     var real = need.length ? done / need.length : 1;
     var target = real >= 1 ? 1 : Math.min(0.9, real * 0.8 + Math.min(0.2, (Date.now() - t0) / 8000));
     shown += (target - shown) * 0.12;
     bar.style.transform = "scaleX(" + shown + ")";
-    if (real >= 1 && shown > 0.995 && Date.now() - t0 > 700) {
-      bar.style.transform = "scaleX(1)";
-      loader.classList.add("done");
-      return;
-    }
+    if (real >= 1 && shown > 0.995 && Date.now() - t0 > 700) { bar.style.transform = "scaleX(1)"; loader.classList.add("done"); return; }
     requestAnimationFrame(frame);
-  }
-  frame();
-})();
-
-function resize(){
-  var d = dims();
-  $book.turn("size", d.w, d.h);
-  place($book.turn("view"));
-}
-
-// ----- scroll view (spreads) -----
-function buildScroll(){
-  var sc = $("#scroll");
-  // same grouping as the flipbook: cover alone, spreads as pairs, last page alone
-  SP.forEach(function(s){
-    var row = $('<div class="row"></div>');
-    s.forEach(function(p){ row.append($('<img loading="lazy">').attr({alt: "Page " + p, src: med(p)})); });
-    sc.append(row);
-  });
+  })();
 }
 
 function setMode(mode){
-  $("body").toggleClass("flip", mode === "flip").toggleClass("scroll", mode === "scroll");
-  $("#m-flip").attr("aria-pressed", mode === "flip");
-  $("#m-scroll").attr("aria-pressed", mode === "scroll");
+  document.body.classList.toggle("flip", mode === "flip");
+  document.body.classList.toggle("scroll", mode === "scroll");
+  $("#m-flip").setAttribute("aria-pressed", mode === "flip");
+  $("#m-scroll").setAttribute("aria-pressed", mode === "scroll");
   var u = new URL(location); u.searchParams.set("view", mode); history.replaceState(null, "", u);
-  if (mode === "flip") { resize(); updateUI($book.turn("view")); }
-  else { window.scrollTo(0, 0); $("#of").text(TOTAL + " pages"); }
+  if (mode === "flip") { pf.update(); refresh(); }
+  else { window.scrollTo(0, 0); $("#of").textContent = TOTAL + " pages"; }
 }
 
-// ----- zoom -----
-// Opens the current spread fitted to the screen using the images already cached from the
-// flipbook (instant), then swaps in the large files as they load. Mouse wheel or pinch to
-// zoom, drag to pan, double-click / double-tap to toggle, + - 0 and arrow keys.
-var $lb = $("#lb"), $in = $("#lb .in");
+// ----- zoom: fitted to the screen, wheel / pinch to zoom, drag to pan -----
+var lb = $("#lb"), inn = $("#lb .in");
 var z = {s: 1, x: 0, y: 0}, fit = {w: 0, h: 0, n: 1}, ptrs = {}, gest = null, lastTap = null, lastFocus = null;
 
 function maxScale(){
-  // up to 1.5x the large image's true pixel size, never below 2.5x
-  var im = $in.children()[0], nat = (im && im.naturalWidth) || 2000, pw = fit.w / fit.n;
+  var im = inn.children[0], nat = (im && im.naturalWidth) || 2000, pw = fit.w / fit.n;
   return Math.min(10, Math.max(2.5, nat / (pw * (window.devicePixelRatio || 1)) * 1.5));
 }
 function layout(){
   var vw = window.innerWidth, vh = window.innerHeight, n = fit.n, pad = vw < 600 ? 12 : 40;
   var ph = Math.min(vh - pad * 2, (vw - pad * 2) / (n * ASPECT)), pw = ph * ASPECT;
   fit.w = pw * n; fit.h = ph;
-  $in.children().css({width: pw, height: ph});
-  $in.css({width: fit.w, height: fit.h});
+  Array.prototype.forEach.call(inn.children, function(c){ c.style.width = pw + "px"; c.style.height = ph + "px"; });
+  inn.style.width = fit.w + "px"; inn.style.height = fit.h + "px";
 }
 function apply(anim){
   var vw = window.innerWidth, vh = window.innerHeight, cw = fit.w * z.s, ch = fit.h * z.s;
-  // keep the pages covering the screen when zoomed in, centred when smaller than the screen
   z.x = cw <= vw ? (vw - cw) / 2 : Math.min(0, Math.max(vw - cw, z.x));
   z.y = ch <= vh ? (vh - ch) / 2 : Math.min(0, Math.max(vh - ch, z.y));
-  $in.toggleClass("anim", !!anim)
-     .css("transform", "translate(" + z.x + "px," + z.y + "px) scale(" + z.s + ")");
+  inn.classList.toggle("anim", !!anim);
+  inn.style.transform = "translate(" + z.x + "px," + z.y + "px) scale(" + z.s + ")";
 }
-function zoomTo(s, cx, cy, anim){   // zoom about the screen point (cx, cy)
+function zoomTo(s, cx, cy, anim){
   s = Math.min(maxScale(), Math.max(1, s));
   var k = s / z.s;
   z.x = cx - (cx - z.x) * k; z.y = cy - (cy - z.y) * k; z.s = s;
@@ -324,29 +290,26 @@ function zoomTo(s, cx, cy, anim){   // zoom about the screen point (cx, cy)
 function centre(){ return [window.innerWidth / 2, window.innerHeight / 2]; }
 
 function openZoom(){
-  var view = $book.turn("view").filter(function(x){ return x > 0 && x <= TOTAL; });
-  fit.n = view.length;
-  lastFocus = document.activeElement;
-  $in.empty();
-  view.forEach(function(p){
+  var v = view();
+  fit.n = v.length; lastFocus = document.activeElement; inn.innerHTML = "";
+  v.forEach(function(p){
     var im = new Image(), big = new Image();
     im.alt = "Page " + p; im.draggable = false; im.src = med(p);
     var swap = function(){ im.src = big.src; };
     big.onload = function(){ if (big.decode) big.decode().then(swap, swap); else swap(); };
     big.src = large(p);
-    $in.append(im);
+    inn.appendChild(im);
   });
-  $lb.addClass("on");
+  lb.classList.add("on");
   layout(); z.s = 1; apply();
   $("#lbclose").focus();
 }
 function closeZoom(){
-  if (!$lb.hasClass("on")) return;
-  $lb.removeClass("on drag"); $in.empty(); ptrs = {}; gest = null;
+  if (!lb.classList.contains("on")) return;
+  lb.classList.remove("on", "drag"); inn.innerHTML = ""; ptrs = {}; gest = null;
   if (lastFocus && lastFocus.focus) lastFocus.focus();
 }
 
-// gestures: one pointer pans, two pointers pinch
 function startGesture(){
   var ids = Object.keys(ptrs);
   if (ids.length === 1) {
@@ -354,40 +317,37 @@ function startGesture(){
     gest = {mode: "pan", px: p.x, py: p.y, x: z.x, y: z.y};
   } else if (ids.length >= 2) {
     var a = ptrs[ids[0]], b = ptrs[ids[1]];
-    gest = {mode: "pinch", d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s: z.s, x: z.x, y: z.y,
-            mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2};
+    gest = {mode: "pinch", d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s: z.s, x: z.x, y: z.y, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2};
   } else gest = null;
 }
 function onTap(e){
   var now = Date.now();
   if (lastTap && now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
-    lastTap = null;                                   // double tap: toggle fit <-> zoomed in
+    lastTap = null;
     zoomTo(z.s > 1.05 ? 1 : Math.min(maxScale(), 2.5), e.clientX, e.clientY, true);
     return;
   }
   lastTap = {t: now, x: e.clientX, y: e.clientY};
   var inside = e.clientX >= z.x && e.clientX <= z.x + fit.w * z.s && e.clientY >= z.y && e.clientY <= z.y + fit.h * z.s;
-  if (!inside) closeZoom();                           // tap on the empty background closes
+  if (!inside) closeZoom();
 }
-var lbEl = $lb[0];
-lbEl.addEventListener("pointerdown", function(e){
+lb.addEventListener("pointerdown", function(e){
   if (e.target.closest("#lbtools")) return;
-  lbEl.setPointerCapture(e.pointerId);
+  lb.setPointerCapture(e.pointerId);
   ptrs[e.pointerId] = {x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t: Date.now()};
-  $in.removeClass("anim"); $lb.addClass("drag");
+  inn.classList.remove("anim"); lb.classList.add("drag");
   startGesture();
 });
-lbEl.addEventListener("pointermove", function(e){
+lb.addEventListener("pointermove", function(e){
   var p = ptrs[e.pointerId];
   if (!p || !gest) return;
   p.x = e.clientX; p.y = e.clientY;
-  if (gest.mode === "pan") {
-    z.x = gest.x + (p.x - gest.px); z.y = gest.y + (p.y - gest.py);
-  } else {
+  if (gest.mode === "pan") { z.x = gest.x + (p.x - gest.px); z.y = gest.y + (p.y - gest.py); }
+  else {
     var ids = Object.keys(ptrs), a = ptrs[ids[0]], b = ptrs[ids[1]];
     var d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     var s = Math.min(maxScale(), Math.max(1, gest.s * d / gest.d));
-    var cx = (gest.mx - gest.x) / gest.s, cy = (gest.my - gest.y) / gest.s;  // content point under the start midpoint
+    var cx = (gest.mx - gest.x) / gest.s, cy = (gest.my - gest.y) / gest.s;
     z.s = s; z.x = mx - cx * s; z.y = my - cy * s;
   }
   apply();
@@ -397,72 +357,67 @@ function endPointer(e){
   if (!p) return;
   delete ptrs[e.pointerId];
   var tap = e.type === "pointerup" && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < 6 && Date.now() - p.t < 300;
-  if (!Object.keys(ptrs).length) $lb.removeClass("drag");
+  if (!Object.keys(ptrs).length) lb.classList.remove("drag");
   startGesture();
   if (tap && !Object.keys(ptrs).length) onTap(e);
 }
-lbEl.addEventListener("pointerup", endPointer);
-lbEl.addEventListener("pointercancel", endPointer);
-lbEl.addEventListener("wheel", function(e){
+lb.addEventListener("pointerup", endPointer);
+lb.addEventListener("pointercancel", endPointer);
+lb.addEventListener("wheel", function(e){
   e.preventDefault();
   var d = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
-  zoomTo(z.s * Math.exp(-d * (e.ctrlKey ? 0.01 : 0.002)), e.clientX, e.clientY);   // ctrl = trackpad pinch
+  zoomTo(z.s * Math.exp(-d * (e.ctrlKey ? 0.01 : 0.002)), e.clientX, e.clientY);
 }, {passive: false});
 
-$("#zin").on("click",  function(){ var c = centre(); zoomTo(z.s * 1.5, c[0], c[1], true); });
-$("#zout").on("click", function(){ var c = centre(); zoomTo(z.s / 1.5, c[0], c[1], true); });
-$("#lbclose").on("click", closeZoom);
+$("#zin").onclick  = function(){ var c = centre(); zoomTo(z.s * 1.5, c[0], c[1], true); };
+$("#zout").onclick = function(){ var c = centre(); zoomTo(z.s / 1.5, c[0], c[1], true); };
+$("#lbclose").onclick = closeZoom;
 
 // type a page number in the indicator and press Enter to jump
-function jump(){
-  var n = parseInt($("#pg").val(), 10);
-  if (n >= 1) $book.turn("page", Math.min(n, TOTAL));
-}
-$("#pg").on("focus", function(){ var el = this; setTimeout(function(){ el.select(); }, 0); })
-  .on("keydown", function(e){
-    if (e.keyCode === 13) { jump(); this.blur(); }
-    else if (e.keyCode === 27) this.blur();
-  })
-  .on("blur", function(){ updateUI($book.turn("view")); });
+var pg = $("#pg");
+pg.addEventListener("focus", function(){ setTimeout(function(){ pg.select(); }, 0); });
+pg.addEventListener("keydown", function(e){
+  if (e.keyCode === 13) { var n = parseInt(pg.value, 10); if (n >= 1) goTo(n); pg.blur(); }
+  else if (e.keyCode === 27) pg.blur();
+});
+pg.addEventListener("blur", function(){ if (pf) updateUI(); });
 
-$("#m-flip").on("click", function(){ setMode("flip"); });
-$("#m-scroll").on("click", function(){ setMode("scroll"); });
-$("#prev").on("click", function(){ $book.turn("previous"); });
-$("#next").on("click", function(){ $book.turn("next"); });
-$("#zoom").on("click", openZoom);
-$book.on("dblclick", openZoom);
-$("#fs").on("click", function(){
+$("#m-flip").onclick = function(){ setMode("flip"); };
+$("#m-scroll").onclick = function(){ setMode("scroll"); };
+$("#prev").onclick = function(){ pf.flipPrev("bottom"); };
+$("#next").onclick = function(){ pf.flipNext("bottom"); };
+$("#zoom").onclick = openZoom;
+bookEl.addEventListener("dblclick", openZoom);
+$("#fs").onclick = function(){
   if (document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen();
-});
-$(window).on("resize orientationchange", function(){
-  if ($("body").hasClass("flip")) resize();
-  if ($lb.hasClass("on")) { layout(); z.s = 1; apply(); }
-});
-$(window).on("keydown", function(e){
-  if ($lb.hasClass("on")) {
+};
+function onResize(){
+  if (pf && document.body.classList.contains("flip")) { pf.update(); place(); }
+  if (lb.classList.contains("on")) { layout(); z.s = 1; apply(); }
+}
+window.addEventListener("resize", onResize);
+window.addEventListener("orientationchange", onResize);
+window.addEventListener("keydown", function(e){
+  if (lb.classList.contains("on")) {
     var k = e.keyCode, c = centre();
     if (k === 27) closeZoom();
-    else if (k === 187 || k === 107 || k === 61) zoomTo(z.s * 1.5, c[0], c[1], true);    // +
-    else if (k === 189 || k === 109 || k === 173) zoomTo(z.s / 1.5, c[0], c[1], true);  // -
-    else if (k === 48 || k === 96) zoomTo(1, c[0], c[1], true);                           // 0 = fit
-    else if (k >= 37 && k <= 40) {                                                        // arrows pan
+    else if (k === 187 || k === 107 || k === 61) zoomTo(z.s * 1.5, c[0], c[1], true);
+    else if (k === 189 || k === 109 || k === 173) zoomTo(z.s / 1.5, c[0], c[1], true);
+    else if (k === 48 || k === 96) zoomTo(1, c[0], c[1], true);
+    else if (k >= 37 && k <= 40) {
       z.x += k === 37 ? 80 : k === 39 ? -80 : 0; z.y += k === 38 ? 80 : k === 40 ? -80 : 0;
       apply(true); e.preventDefault();
-    } else if (k === 9) {                                                                 // keep Tab inside the viewer
-      var bs = $("#lbtools button").get(), i = bs.indexOf(document.activeElement);
+    } else if (k === 9) {
+      var bs = Array.prototype.slice.call(document.querySelectorAll("#lbtools button")), i = bs.indexOf(document.activeElement);
       bs[(i + (e.shiftKey ? -1 : 1) + bs.length) % bs.length].focus(); e.preventDefault();
     }
     return;
   }
-  if (e.target.tagName === "INPUT") return;
-  if (!$("body").hasClass("flip")) return;
-  if (e.keyCode === 37) { $book.turn("previous"); e.preventDefault(); }
-  if (e.keyCode === 39) { $book.turn("next"); e.preventDefault(); }
+  if (e.target.tagName === "INPUT" || !pf || !document.body.classList.contains("flip")) return;
+  if (e.keyCode === 37) { pf.flipPrev("bottom"); e.preventDefault(); }
+  if (e.keyCode === 39) { pf.flipNext("bottom"); e.preventDefault(); }
 });
-
-buildStrip(); buildScroll();
-setMode(new URLSearchParams(location.search).get("view") === "scroll" ? "scroll" : "flip");
 </script>
 </body>
 </html>
